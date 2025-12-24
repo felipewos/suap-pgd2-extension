@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "SUAP PGD2 PIT/RIT Autofill Pro",
+  "version": "1.0.1",
+  "description": "Automatiza o preenchimento de entregas PIT/RIT no SUAP PGD2 (por entrega e em lote), com licença, trial e vinculação por usuário.",
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_title": "SUAP PGD2 PIT/RIT"
+  },
+  "options_page": "ui/options.html",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://suap.cefet-rj.br/pgd2/*",
+    "https://api.proffelipewagner.com.br/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://suap.cefet-rj.br/pgd2/*"],
+      "js": [
+        "content/util.js",
+        "content/suap_user.js",
+        "content/auth.js",
+        "content/styles_inject.js",
+        "content/pit_single.js",
+        "content/rit_single.js",
+        "content/pit_batch.js",
+        "content/rit_batch.js",
+        "content/content_boot.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
+  }
+}

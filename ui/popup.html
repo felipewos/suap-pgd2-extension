@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>SUAP PGD2</title>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../assets/icon32.png" alt="" />
+      <div>
+        <div class="title">SUAP PGD2 PIT/RIT</div>
+        <div class="subtitle">Status & licença</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="row">
+        <div class="label">Usuário atual</div>
+        <div id="boundUser" class="value">—</div>
+      </div>
+      <div class="row">
+        <div class="label">Acesso</div>
+        <div id="status" class="value">—</div>
+      </div>
+      <div class="row">
+        <div class="label">Plano</div>
+        <div id="plan" class="value">—</div>
+      </div>
+      <div class="row">
+        <div class="label">Validade</div>
+        <div id="validity" class="value">—</div>
+      </div>
+
+      <div class="actions">
+        <button id="btnVerify" class="btn">Verificar status</button>
+        <button id="btnOptions" class="btn btn-secondary">Abrir configurações</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="label">Chave de licença</div>
+      <div class="actions">
+        <input id="licenseKey" type="text" placeholder="Cole sua chave (ex.: ABCD-...)" />
+        <button id="btnActivate" class="btn btn-primary">Ativar</button>
+      </div>
+
+      <div class="hint" id="licenseHint"></div>
+
+      <div class="actions">
+        <button id="btnBuy" class="btn btn-success">Comprar (site)</button>
+        <button id="btnClear" class="btn btn-danger">Limpar chave</button>
+      </div>
+    </section>
+      <div class="hint">
+        • Trial libera <b>tudo</b> por tempo limitado.<br/>
+        • Plano <b>Básico</b>: por entrega.<br/>
+        • Plano <b>Pro</b>: por entrega + <b>lote</b>.
+      </div>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

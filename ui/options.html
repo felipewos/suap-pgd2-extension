@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="options.css" />
+  <title>SUAP PGD2 PIT/RIT - Configurações</title>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Configurações — SUAP PGD2 PIT/RIT</h1>
+
+    <section class="card">
+      <h2>Status</h2>
+      <div class="grid">
+        <div class="item"><div class="k">Usuário atual</div><div id="boundUser" class="v">—</div></div>
+        <div class="item"><div class="k">Acesso</div><div id="status" class="v">—</div></div>
+        <div class="item"><div class="k">Plano</div><div id="plan" class="v">—</div></div>
+        <div class="item"><div class="k">Validade</div><div id="validity" class="v">—</div></div>
+      </div>
+
+      <div class="actions">
+        <button id="btnVerify" class="btn primary">Verificar status</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Licença</h2>
+      <div class="actions">
+        <input id="licenseKey" type="text" placeholder="Chave de licença" />
+        <button id="btnActivate" class="btn primary">Ativar</button>
+        <button id="btnClear" class="btn danger">Limpar</button>
+      </div>
+      <div class="small">A chave é salva para o usuário atual detectado no SUAP.</div>
+    </section>
+
+    <section class="card">
+      <h2>Planos</h2>
+      <ul>
+        <li><b>Trial</b>: libera tudo (por entrega + lote) por período definido no backend.</li>
+        <li><b>Básico</b>: por entrega (PIT/RIT).</li>
+        <li><b>Pro</b>: por entrega + lote (PIT/RIT).</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
