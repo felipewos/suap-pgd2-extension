@@ -17,7 +17,9 @@
   "permissions": ["storage"],
   "host_permissions": [
     "https://suap.cefet-rj.br/pgd2/*",
-    "https://api.proffelipewagner.com.br/*"
+    "https://api.proffelipewagner.com.br/api/*",
+    "https://api.proffelipewagner.com.br/healthz",
+    "https://api.proffelipewagner.com.br/buy*"
   ],
   "content_scripts": [
     {
