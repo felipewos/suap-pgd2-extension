@@ -1,6 +1,9 @@
 // service_worker.js (MV3, module)
+
+// ✅ Novo: cliente HTTP centralizado
+import { bindUser, verifyLicense } from "./apiClient.js";
+
 const DEFAULTS = {
-  // PRODUÇÃO: backend fixo (domínio próprio)
   apiBase: "https://api.proffelipewagner.com.br",
   cacheHours: 24
 };
@@ -8,18 +11,10 @@ const DEFAULTS = {
 const STORAGE_KEYS = {
   settings: "settings",
   deviceId: "deviceId",
-
-  // Compatibilidade com UI: representa o "usuário atual detectado no SUAP"
   boundUserKey: "boundUserKey",
   boundUserLabel: "boundUserLabel",
-
-  // Legado (versões antigas)
   licenseKey: "licenseKey",
-
-  // Licenças por usuário (map userKey -> licenseKey)
   licenseKeys: "licenseKeys",
-
-  // Cache de acesso por usuário
   access: "access"
 };
 
@@ -43,11 +38,8 @@ async function ensureDeviceId() {
 
 // IMPORTANTE: apiBase e cacheHours são FIXOS (não aceitam override por settings)
 function sanitizeSettings(_raw) {
-  // Ignora qualquer coisa que venha do usuário
   const apiBase = DEFAULTS.apiBase;
   const cacheHours = DEFAULTS.cacheHours;
-
-  // Retorna só os campos aceitos (remove debug/testUserId/apiBase antigo etc.)
   return { apiBase, cacheHours };
 }
 
@@ -55,17 +47,13 @@ async function ensureSettings() {
   const { settings } = await getFromStorage([STORAGE_KEYS.settings]);
   const clean = sanitizeSettings(settings || {});
 
-  // evita escrever em storage toda hora (só se faltar ou estiver diferente)
   const same =
     settings &&
     typeof settings === "object" &&
     settings.apiBase === clean.apiBase &&
     settings.cacheHours === clean.cacheHours;
 
-  if (!same) {
-    await setInStorage({ [STORAGE_KEYS.settings]: clean });
-  }
-
+  if (!same) await setInStorage({ [STORAGE_KEYS.settings]: clean });
   return clean;
 }
 
@@ -74,7 +62,7 @@ function estimateServerNow(access) {
   return access.lastCheckedServerMs + (nowMs() - access.lastCheckedClientMs);
 }
 
-// Auto-expire local (melhora produção sem precisar clicar "Verificar status")
+// Auto-expire local
 function autoExpireAccessIfNeeded(access) {
   if (!access) return { access: null, changed: false };
 
@@ -105,7 +93,6 @@ function autoExpireAccessIfNeeded(access) {
 }
 
 function computeAccessState(payload) {
-  // payload: { serverTimeMs, trial:{endsAtMs, active}, license:{active, plan, endsAtMs} }
   const serverTimeMs = payload.serverTimeMs;
   const licenseActive = !!payload.license?.active && payload.license.endsAtMs && payload.license.endsAtMs > serverTimeMs;
   const trialActive = !!payload.trial?.active && payload.trial.endsAtMs && payload.trial.endsAtMs > serverTimeMs;
@@ -123,7 +110,7 @@ function computeAccessState(payload) {
   if (trialActive) {
     return {
       status: "trial_active",
-      plan: "pro", // trial libera tudo
+      plan: "pro",
       trialEndsAtMs: payload.trial.endsAtMs,
       licenseEndsAtMs: null,
       serverTimeMs
@@ -137,29 +124,6 @@ function computeAccessState(payload) {
     licenseEndsAtMs: payload.license?.endsAtMs || null,
     serverTimeMs
   };
-}
-
-async function apiPost(path, body) {
-  const settings = await ensureSettings();
-  const url = settings.apiBase.replace(/\/+$/, "") + path;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {})
-  });
-
-  const text = await res.text();
-  let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { /* ignore */ }
-
-  if (!res.ok) {
-    const err = new Error(`API ${res.status}`);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-  return data;
 }
 
 function normalizeLicenseKeys(raw) {
@@ -237,11 +201,9 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
 
   const deviceId = await ensureDeviceId();
 
-  // Cache só vale se for do mesmo usuário
   let cached = store.access || null;
   if (cached?.userKey && cached.userKey !== currentUserKey) cached = null;
 
-  // Auto-expire do cache
   if (cached) {
     const { access: exp, changed } = autoExpireAccessIfNeeded(cached);
     if (changed) {
@@ -250,7 +212,6 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
     }
   }
 
-  // Use cached if fresh
   if (!force && cached?.lastCheckedServerMs && cached?.lastCheckedClientMs) {
     const serverNow = estimateServerNow(cached);
     const ageMs = serverNow != null ? (serverNow - cached.lastCheckedServerMs) : Infinity;
@@ -263,13 +224,12 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
   try {
     let payload = null;
 
-    // 1) tenta licença (se tiver)
     if (licenseKey) {
       try {
-        payload = await apiPost("/api/license/verify", {
+        payload = await verifyLicense({
+          boundUserKey: currentUserKey,
           licenseKey,
           extensionId: chrome.runtime.id,
-          boundUserKey: currentUserKey,
           deviceId
         });
       } catch (e) {
@@ -279,14 +239,8 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
       }
     }
 
-    // 2) sem licença válida: bind idempotente (inicia trial do usuário uma vez)
     if (!payload) {
-      payload = await apiPost("/api/auth/bind", {
-        extensionId: chrome.runtime.id,
-        boundUserKey: currentUserKey,
-        deviceId,
-        boundUserLabel: currentUserLabel
-      });
+      payload = await bindUser(currentUserKey, currentUserLabel);
     }
 
     const state = computeAccessState(payload);
@@ -305,7 +259,6 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
     return { ok: true, access, fromCache: false };
 
   } catch (e) {
-    // Offline/API down: se cache (mesmo usuário) estiver fresco, usa.
     if (cached?.lastCheckedServerMs && cached?.lastCheckedClientMs) {
       const { access: exp, changed } = autoExpireAccessIfNeeded(cached);
       if (changed) {
@@ -402,7 +355,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       if (msg.type === "SAVE_SETTINGS") {
-        // Mantém fixo (só regrava defaults limpos)
         const clean = sanitizeSettings({});
         await setInStorage({ [STORAGE_KEYS.settings]: clean });
         return sendResponse({ ok: true, settings: clean });
@@ -477,5 +429,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
   })();
 
-  return true; // async
+  return true;
 });
