@@ -1,7 +1,6 @@
 // service_worker.js (MV3, module)
 
-// ✅ Novo: cliente HTTP centralizado
-import { bindUser, verifyLicense } from "./apiClient.js";
+import { ApiError, bindUser, verifyLicense } from "./lib/apiClient.js";
 
 const DEFAULTS = {
   apiBase: "https://api.proffelipewagner.com.br",
@@ -11,14 +10,23 @@ const DEFAULTS = {
 const STORAGE_KEYS = {
   settings: "settings",
   deviceId: "deviceId",
+
   boundUserKey: "boundUserKey",
   boundUserLabel: "boundUserLabel",
+
+  // legado
   licenseKey: "licenseKey",
+
+  // map userKey -> licenseKey
   licenseKeys: "licenseKeys",
+
+  // cache de acesso por usuario
   access: "access"
 };
 
-function nowMs() { return Date.now(); }
+function nowMs() {
+  return Date.now();
+}
 
 async function getFromStorage(keys) {
   return await chrome.storage.local.get(keys);
@@ -28,25 +36,17 @@ async function setInStorage(obj) {
   await chrome.storage.local.set(obj);
 }
 
-async function ensureDeviceId() {
-  const { deviceId } = await getFromStorage([STORAGE_KEYS.deviceId]);
-  if (deviceId) return deviceId;
-  const id = crypto.randomUUID ? crypto.randomUUID() : (Math.random().toString(16).slice(2) + "-" + nowMs());
-  await setInStorage({ [STORAGE_KEYS.deviceId]: id });
-  return id;
-}
-
-// IMPORTANTE: apiBase e cacheHours são FIXOS (não aceitam override por settings)
+// FIXO: nao aceita override vindo de UI
 function sanitizeSettings(_raw) {
-  const apiBase = DEFAULTS.apiBase;
-  const cacheHours = DEFAULTS.cacheHours;
-  return { apiBase, cacheHours };
+  return {
+    apiBase: DEFAULTS.apiBase,
+    cacheHours: DEFAULTS.cacheHours
+  };
 }
 
 async function ensureSettings() {
   const { settings } = await getFromStorage([STORAGE_KEYS.settings]);
   const clean = sanitizeSettings(settings || {});
-
   const same =
     settings &&
     typeof settings === "object" &&
@@ -57,12 +57,25 @@ async function ensureSettings() {
   return clean;
 }
 
+async function ensureDeviceId() {
+  const { deviceId } = await getFromStorage([STORAGE_KEYS.deviceId]);
+  if (deviceId) return deviceId;
+
+  const c = globalThis.crypto;
+  const id =
+    c && typeof c.randomUUID === "function"
+      ? c.randomUUID()
+      : Math.random().toString(16).slice(2) + "-" + nowMs();
+
+  await setInStorage({ [STORAGE_KEYS.deviceId]: id });
+  return id;
+}
+
 function estimateServerNow(access) {
   if (!access?.lastCheckedServerMs || !access?.lastCheckedClientMs) return null;
   return access.lastCheckedServerMs + (nowMs() - access.lastCheckedClientMs);
 }
 
-// Auto-expire local
 function autoExpireAccessIfNeeded(access) {
   if (!access) return { access: null, changed: false };
 
@@ -71,12 +84,10 @@ function autoExpireAccessIfNeeded(access) {
   let next = access;
 
   const mustExpireTrial =
-    next.status === "trial_active" &&
-    (!next.trialEndsAtMs || next.trialEndsAtMs <= serverNow);
+    next.status === "trial_active" && (!next.trialEndsAtMs || next.trialEndsAtMs <= serverNow);
 
   const mustExpireLicense =
-    next.status === "paid_active" &&
-    (!next.licenseEndsAtMs || next.licenseEndsAtMs <= serverNow);
+    next.status === "paid_active" && (!next.licenseEndsAtMs || next.licenseEndsAtMs <= serverNow);
 
   if (mustExpireTrial || mustExpireLicense) {
     changed = true;
@@ -94,8 +105,14 @@ function autoExpireAccessIfNeeded(access) {
 
 function computeAccessState(payload) {
   const serverTimeMs = payload.serverTimeMs;
-  const licenseActive = !!payload.license?.active && payload.license.endsAtMs && payload.license.endsAtMs > serverTimeMs;
-  const trialActive = !!payload.trial?.active && payload.trial.endsAtMs && payload.trial.endsAtMs > serverTimeMs;
+
+  const licenseActive =
+    !!payload.license?.active &&
+    payload.license.endsAtMs &&
+    payload.license.endsAtMs > serverTimeMs;
+
+  const trialActive =
+    !!payload.trial?.active && payload.trial.endsAtMs && payload.trial.endsAtMs > serverTimeMs;
 
   if (licenseActive) {
     return {
@@ -110,7 +127,7 @@ function computeAccessState(payload) {
   if (trialActive) {
     return {
       status: "trial_active",
-      plan: "pro",
+      plan: "pro", // trial libera tudo
       trialEndsAtMs: payload.trial.endsAtMs,
       licenseEndsAtMs: null,
       serverTimeMs
@@ -185,7 +202,7 @@ async function setCurrentUser(userKey, userLabel) {
   });
 }
 
-async function refreshAccess({ force = false, userKey = null, userLabel = null } = {}) {
+async function refreshAccess({ force = false, userKey = null, userLabel = null, strictLicense = false } = {}) {
   const settings = await ensureSettings();
 
   const store = await getFromStorage([
@@ -201,9 +218,11 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
 
   const deviceId = await ensureDeviceId();
 
+  // Cache so vale se for do mesmo usuario
   let cached = store.access || null;
   if (cached?.userKey && cached.userKey !== currentUserKey) cached = null;
 
+  // Auto-expire do cache
   if (cached) {
     const { access: exp, changed } = autoExpireAccessIfNeeded(cached);
     if (changed) {
@@ -212,9 +231,10 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
     }
   }
 
+  // Use cached if fresh
   if (!force && cached?.lastCheckedServerMs && cached?.lastCheckedClientMs) {
     const serverNow = estimateServerNow(cached);
-    const ageMs = serverNow != null ? (serverNow - cached.lastCheckedServerMs) : Infinity;
+    const ageMs = serverNow != null ? serverNow - cached.lastCheckedServerMs : Infinity;
     const maxAgeMs = (settings.cacheHours || 24) * 60 * 60 * 1000;
     if (ageMs >= 0 && ageMs < maxAgeMs) return { ok: true, access: cached, fromCache: true };
   }
@@ -224,6 +244,7 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
   try {
     let payload = null;
 
+    // 1) tenta licenca (se tiver)
     if (licenseKey) {
       try {
         payload = await verifyLicense({
@@ -232,13 +253,25 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
           extensionId: chrome.runtime.id,
           deviceId
         });
-      } catch (e) {
-        // se licença não serve para este usuário: cai para bind/trial
-        if (e?.status !== 403 && e?.status !== 404) throw e;
+      } catch (err) {
+        const status = Number(err?.status || 0);
+        const explicitLicenseError =
+          err instanceof ApiError &&
+          status >= 400 &&
+          status < 500;
+
+        if (explicitLicenseError && strictLicense) {
+          return {
+            ok: false,
+            reason: err?.body?.error || err?.message || "verify_failed"
+          };
+        }
+
         payload = null;
       }
     }
 
+    // 2) sem licenca: bind (inicia trial idempotente)
     if (!payload) {
       payload = await bindUser(currentUserKey, currentUserLabel);
     }
@@ -257,8 +290,8 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
 
     await setInStorage({ [STORAGE_KEYS.access]: access });
     return { ok: true, access, fromCache: false };
-
-  } catch (e) {
+  } catch {
+    // Offline/API down: se cache (mesmo usuario) estiver fresco, usa.
     if (cached?.lastCheckedServerMs && cached?.lastCheckedClientMs) {
       const { access: exp, changed } = autoExpireAccessIfNeeded(cached);
       if (changed) {
@@ -268,7 +301,7 @@ async function refreshAccess({ force = false, userKey = null, userLabel = null }
 
       const serverNow = estimateServerNow(cached);
       const maxAgeMs = (settings.cacheHours || 24) * 60 * 60 * 1000;
-      const isStale = serverNow == null || (serverNow - cached.lastCheckedServerMs) >= maxAgeMs;
+      const isStale = serverNow == null || serverNow - cached.lastCheckedServerMs >= maxAgeMs;
 
       if (!isStale) return { ok: true, access: cached, fromCache: true, apiError: true };
 
@@ -391,7 +424,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!currentUserKey) return sendResponse({ ok: false, error: "no_user_open_suap" });
 
         await setLicenseKeyForUser(currentUserKey, key);
-        const ref = await refreshAccess({ force: true, userKey: currentUserKey, userLabel: currentUserLabel });
+        const ref = await refreshAccess({
+          force: true,
+          userKey: currentUserKey,
+          userLabel: currentUserLabel,
+          strictLicense: true
+        });
 
         if (!ref.ok) return sendResponse({ ok: false, error: ref.reason || "verify_failed" });
         return sendResponse({ ok: true, access: ref.access });
@@ -404,7 +442,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         if (currentUserKey) await clearLicenseKeyForUser(currentUserKey);
 
-        const ref = await refreshAccess({ force: true, userKey: currentUserKey, userLabel: currentUserLabel });
+        const ref = await refreshAccess({
+          force: true,
+          userKey: currentUserKey,
+          userLabel: currentUserLabel,
+          strictLicense: true
+        });
         return sendResponse({ ok: true, access: ref.ok ? ref.access : null });
       }
 
@@ -416,11 +459,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const ref = await refreshAccess({ force: true, userKey: currentUserKey, userLabel: currentUserLabel });
         if (!ref.ok) return sendResponse({ ok: false, error: ref.reason || "verify_failed" });
 
-        return sendResponse({ ok: true, access: ref.access, fromCache: ref.fromCache || false, apiError: ref.apiError || false });
-      }
-
-      if (msg.type === "REBIND") {
-        return sendResponse({ ok: false, error: "rebind_not_used_in_user_mode" });
+        return sendResponse({
+          ok: true,
+          access: ref.access,
+          fromCache: ref.fromCache || false,
+          apiError: ref.apiError || false
+        });
       }
 
       return sendResponse({ ok: false, error: "unknown_type" });

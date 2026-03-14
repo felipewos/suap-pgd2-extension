@@ -1,4 +1,4 @@
-// content/auth.js
+﻿// content/auth.js
 (() => {
   if (window.__SUAP_EXT_AUTH__) return;
   window.__SUAP_EXT_AUTH__ = true;

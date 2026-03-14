@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -12,7 +12,7 @@
       <img src="../assets/icon32.png" alt="" />
       <div>
         <div class="title">SUAP PGD2 PIT/RIT</div>
-        <div class="subtitle">Status & licença</div>
+        <div class="subtitle">Status e compra</div>
       </div>
     </div>
   </header>
@@ -21,19 +21,15 @@
     <section class="card">
       <div class="row">
         <div class="label">Usuário atual</div>
-        <div id="boundUser" class="value">—</div>
+        <div id="boundUser" class="value">-</div>
       </div>
       <div class="row">
         <div class="label">Acesso</div>
-        <div id="status" class="value">—</div>
-      </div>
-      <div class="row">
-        <div class="label">Plano</div>
-        <div id="plan" class="value">—</div>
+        <div id="status" class="value">-</div>
       </div>
       <div class="row">
         <div class="label">Validade</div>
-        <div id="validity" class="value">—</div>
+        <div id="validity" class="value">-</div>
       </div>
 
       <div class="actions">
@@ -43,23 +39,22 @@
     </section>
 
     <section class="card">
-      <div class="label">Chave de licença</div>
-      <div class="actions">
-        <input id="licenseKey" type="text" placeholder="Cole sua chave (ex.: ABCD-...)" />
-        <button id="btnActivate" class="btn btn-primary">Ativar</button>
-      </div>
+      <div class="label">Comprar licença</div>
 
-      <div class="hint" id="licenseHint"></div>
-
-      <div class="actions">
-        <button id="btnBuy" class="btn btn-success">Comprar (site)</button>
-        <button id="btnClear" class="btn btn-danger">Limpar chave</button>
-      </div>
-    </section>
       <div class="hint">
-        • Trial libera <b>tudo</b> por tempo limitado.<br/>
-        • Plano <b>Básico</b>: por entrega.<br/>
-        • Plano <b>Pro</b>: por entrega + <b>lote</b>.
+        Escolha um plano abaixo. Você será levado ao Mercado Pago para concluir o pagamento.
+      </div>
+
+      <div class="actions">
+        <button id="btnBuyProMonthly" class="btn btn-success">30 dias<br/>R$ 4,99</button>
+        <button id="btnBuyProYearly" class="btn btn-success">1 ano<br/>R$ 49,99</button>
+      </div>
+
+      <div class="hint">
+        Trial libera tudo por tempo limitado.<br/>
+        30 dias: pagamento único válido por 30 dias.<br/>
+        1 ano: pagamento único válido por 365 dias.<br/>
+        Para colar/ativar sua chave manualmente, use Abrir configurações.
       </div>
     </section>
   </main>

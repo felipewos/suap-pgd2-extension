@@ -1,4 +1,4 @@
-// content/suap_user.js
+﻿// content/suap_user.js
 (() => {
   if (window.__SUAP_EXT_USER__) return;
   window.__SUAP_EXT_USER__ = true;
@@ -19,7 +19,7 @@
     const optionText = norm(option?.textContent);
     const optionValue = norm(option?.value);
 
-    // tentar pegar matrícula do texto/valor
+    // tentar pegar matrÃ­cula do texto/valor
     const m1 = optionText.match(/(\d{5,})/);
     if (m1) return { id: m1[1], label: optionText };
 

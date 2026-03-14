@@ -1,4 +1,4 @@
-// content/util.js
+﻿// content/util.js
 (() => {
   if (window.__SUAP_EXT_UTIL__) return;
   window.__SUAP_EXT_UTIL__ = true;
@@ -24,6 +24,47 @@
     el.blur();
     window.scrollTo(x, y);
     return true;
+  }
+
+  function escapeHtml(text) {
+    return String(text ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function setRichTextNoScroll(el, value) {
+    if (!el) return false;
+    const x = window.scrollX, y = window.scrollY;
+    const text = String(value ?? "");
+    let changed = setValueNoScroll(el, text);
+    const root =
+      el.closest(".form-row, .field-box, .form-group, .aligned, li, td, .module") ||
+      el.parentElement ||
+      document;
+
+    for (const editable of root.querySelectorAll("[contenteditable='true']")) {
+      editable.focus?.();
+      editable.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
+      fire(editable, "input");
+      fire(editable, "change");
+      editable.blur?.();
+      changed = true;
+    }
+
+    for (const iframe of root.querySelectorAll("iframe")) {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (!doc?.body) continue;
+        doc.body.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
+        doc.body.dispatchEvent(new Event("input", { bubbles: true }));
+        doc.body.dispatchEvent(new Event("change", { bubbles: true }));
+        changed = true;
+      } catch {}
+    }
+
+    window.scrollTo(x, y);
+    return changed;
   }
 
   function setIfEmptyNoScroll(sel, value) {
@@ -63,7 +104,7 @@
   }
 
   function tempoToWidgetValue(text) {
-    // Converte vários formatos para horas decimais (pt-BR com vírgula)
+    // Converte vÃ¡rios formatos para horas decimais (pt-BR com vÃ­rgula)
     // "2h" -> "2,00"
     // "2h 30 min" -> "2,50"
     // "2h30" -> "2,50"
@@ -91,7 +132,7 @@
       return total.toFixed(2).replace(".", ",");
     }
 
-    // fallback: primeiro número
+    // fallback: primeiro nÃºmero
     m = t.match(/(\d+(?:[.,]\d+)?)/);
     if (!m) return "";
     const num = Number(String(m[1]).replace(",", "."));
@@ -105,7 +146,7 @@
     b.textContent = text;
     b.className = `btn ${kind === "success" ? "success" : "danger"}`;
 
-    // fallback visual (caso CSS do SUAP não aplique)
+    // fallback visual (caso CSS do SUAP nÃ£o aplique)
     b.style.whiteSpace = "nowrap";
     b.style.cursor = "pointer";
     b.style.borderRadius = "25px";
@@ -121,7 +162,7 @@
   }
 
   function styleLikeSave(btn, form) {
-    // tenta pegar o botão Salvar para copiar a altura/padding/line-height/font
+    // tenta pegar o botÃ£o Salvar para copiar a altura/padding/line-height/font
     const row = form ? (form.querySelector(".submit-row") || form) : document.body;
     const ref =
       row?.querySelector('input[type="submit"], button[type="submit"]') ||
@@ -130,7 +171,7 @@
     btn.className = ref?.className || "btn default";
     btn.style.marginRight = "8px";
 
-    // cor azul padrão combinada com o SUAP (custom)
+    // cor azul padrÃ£o combinada com o SUAP (custom)
     btn.style.background = "#008dcc";
     btn.style.color = "#fff";
     btn.style.borderColor = "#008dcc";
@@ -152,6 +193,7 @@
     fire,
     hasValue,
     setValueNoScroll,
+    setRichTextNoScroll,
     setIfEmptyNoScroll,
     waitFor,
     brToISO,

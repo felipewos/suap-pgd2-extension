@@ -1,9 +1,9 @@
-// content/rit_batch.js
+﻿// content/rit_batch.js
 (() => {
   if (window.__SUAP_EXT_RIT_BATCH__) return;
   window.__SUAP_EXT_RIT_BATCH__ = true;
 
-  const { $, $$, norm, makeBtn, setIfEmptyNoScroll, tempoToWidgetValue } = window.SUAP_EXT;
+  const { $, $$, norm, makeBtn, setIfEmptyNoScroll, setRichTextNoScroll, tempoToWidgetValue } = window.SUAP_EXT;
 
   const RIT_LS_QUEUE = "__SUAP_RIT_BATCH_QUEUE_IDS__";
   const RIT_LS_ACTIVE = "__SUAP_RIT_BATCH_ACTIVE__";
@@ -90,22 +90,98 @@
   }
 
   function extractPIT_onRIT() {
-    // MANTÉM O SELETOR ORIGINAL QUE FUNCIONA NO SUAP:
+    // Extrai do bloco "Entrega do PIT" de forma case/acentos-insensível
     const pit = $("#entrega-do-pit");
     if (!pit) return null;
 
-    const map = new Map();
-    for (const it of $$(".definition-list .list-item", pit)) {
-      const dt = it.querySelector("dt");
-      const dd = it.querySelector("dd");
-      if (!dt || !dd) continue;
-      map.set(norm(dt.textContent).toLowerCase(), norm(dd.textContent));
-    }
+    const clean = (txt) => norm(txt).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const getDefinitionValue = (labelText) => {
+      const target = clean(labelText);
+      for (const dt of $$("dt", pit)) {
+        const k = clean(dt.textContent).replace(/\s*:\s*$/, "");
+        if (!(k === target || k.includes(target))) continue;
+        const dd = dt.parentElement?.querySelector("dd") ||
+          (dt.nextElementSibling?.tagName === "DD" ? dt.nextElementSibling : null);
+        const value = norm(dd?.innerText || dd?.textContent || "");
+        if (value) return value;
+      }
+      return "";
+    };
+
+    const getDescriptionFallback = () => {
+      const extras = $$(".extra-info", pit);
+      for (const extra of extras) {
+        const nodes = Array.from(extra.children);
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          const isLabelTag = /^(H3|H4|H5|LABEL|STRONG|B)$/i.test(node.tagName || "");
+          if (!(isLabelTag && /descricao/i.test(clean(node.textContent || "")))) continue;
+          for (let j = i + 1; j < nodes.length; j++) {
+            const value = norm(nodes[j].innerText || nodes[j].textContent || "");
+            if (value && !/descricao/i.test(clean(value))) return value;
+          }
+        }
+      }
+      for (const label of $$("h3, h4, h5, dt, strong, b, label, .label", pit)) {
+        if (!/descricao/i.test(clean(label.textContent || ""))) continue;
+        let node = label.nextElementSibling;
+        while (node) {
+          const value = norm(node.innerText || node.textContent || "");
+          if (value && !/descricao/i.test(clean(value))) return value;
+          node = node.nextElementSibling;
+        }
+      }
+      return "";
+    };
+
+    const getPanelDescription = (panelId) => {
+      const panel = document.getElementById(panelId);
+      if (!panel) return "";
+
+      const fromDefinitions = (() => {
+        const target = clean("descricao");
+        for (const dt of $$("dt", panel)) {
+          const k = clean(dt.textContent).replace(/\s*:\s*$/, "");
+          if (!(k === target || k.includes(target))) continue;
+          const dd = dt.parentElement?.querySelector("dd") ||
+            (dt.nextElementSibling?.tagName === "DD" ? dt.nextElementSibling : null);
+          const value = norm(dd?.innerText || dd?.textContent || "");
+          if (value) return value;
+        }
+        return "";
+      })();
+      if (fromDefinitions) return fromDefinitions;
+
+      const extras = $$(".extra-info", panel);
+      for (const extra of extras) {
+        const nodes = Array.from(extra.children);
+        for (let i = 0; i < nodes.length; i++) {
+          const node = nodes[i];
+          const isLabelTag = /^(H3|H4|H5|LABEL|STRONG|B)$/i.test(node.tagName || "");
+          if (!(isLabelTag && /descricao/i.test(clean(node.textContent || "")))) continue;
+          for (let j = i + 1; j < nodes.length; j++) {
+            const value = norm(nodes[j].innerText || nodes[j].textContent || "");
+            if (value && !/descricao/i.test(clean(value))) return value;
+          }
+        }
+      }
+
+      for (const label of $$("h3, h4, h5, dt, strong, b, label, .label", panel)) {
+        if (!/descricao/i.test(clean(label.textContent || ""))) continue;
+        let node = label.nextElementSibling;
+        while (node) {
+          const value = norm(node.innerText || node.textContent || "");
+          if (value && !/descricao/i.test(clean(value))) return value;
+          node = node.nextElementSibling;
+        }
+      }
+      return "";
+    };
 
     return {
-      titulo: map.get("título") || map.get("titulo") || "",
-      descricao: map.get("descrição") || map.get("descricao") || "",
-      tempoPlanejado: map.get("tempo planejado") || ""
+      titulo: getDefinitionValue("titulo"),
+      descricao: getDefinitionValue("descricao") || getDescriptionFallback() || getPanelDescription("entrega-do-pes"),
+      tempoPlanejado: getDefinitionValue("tempo planejado") || getDefinitionValue("tempo planeado")
     };
   }
 
@@ -119,7 +195,7 @@
   }
 
   function isCadastroReady() {
-    // MANTÉM O CHECK ORIGINAL:
+    // MANTÃ‰M O CHECK ORIGINAL:
     return $("#relatorioindividualtrabalhocadastrar_form") && $("#id_titulo") && $("#id_descricao") && $("#entrega-do-pit");
   }
 
@@ -128,7 +204,7 @@
     if (!pit) return false;
 
     setIfEmptyNoScroll("#id_titulo", pit.titulo);
-    setIfEmptyNoScroll("#id_descricao", pit.descricao);
+    if (pit.descricao) setRichTextNoScroll($("#id_descricao"), pit.descricao);
 
     const dr = parseDateRangeFromTitle();
     if (dr) {
@@ -182,11 +258,16 @@
     const host = findTopRightHost();
     if (!host) return;
 
-    const start = makeBtn("Preencher e salvar todas (lote)", "success");
+    const locked = !!window.SUAP_EXT?.lockedAccess;
+    const start = makeBtn(
+      locked ? "Comprar licença (trial expirado)" : "Preencher e salvar todas (lote)",
+      locked ? "danger" : "success"
+    );
     start.id = "tm-rit-batch-start";
     start.addEventListener("click", () => {
+      if (locked) { window.SUAP_EXT.openBuyPopup?.(); return; }
       const ids = collectEntregaIdsFromView();
-      if (!ids.length) { alert("Não encontrei links de entrega nesta página."); return; }
+      if (!ids.length) { alert("NÃ£o encontrei links de entrega nesta pÃ¡gina."); return; }
       ritSetQueue(ids);
       ritSetActive(true);
       sessionStorage.removeItem(RIT_SS_LAST);
@@ -194,10 +275,10 @@
       openNextFromQueue();
     });
 
-    // Só o START fica no host (action-bar). O STOP vira flutuante topo-direito.
+    // SÃ³ o START fica no host (action-bar). O STOP vira flutuante topo-direito.
     host.appendChild(start);
 
-    // Se já estiver ativo, garante o stop flutuante
+    // Se jÃ¡ estiver ativo, garante o stop flutuante
     ritEnsureStopFloat();
   }
 
@@ -205,13 +286,15 @@
     if (!isRitViewPage()) return;
     if ($("#tm-rit-batch-start") || $("#tm-rit-batch-start-float")) return;
 
+    const locked = !!window.SUAP_EXT?.lockedAccess;
     const wrap = document.createElement("div");
     wrap.id = "tm-rit-batch-float";
     wrap.className = "tm-ext-float";
 
-    const start = makeBtn("Lote (salvar tudo)", "success");
+    const start = makeBtn(locked ? "Comprar licença (trial expirado)" : "Lote (salvar tudo)", locked ? "danger" : "success");
     start.id = "tm-rit-batch-start-float";
     start.addEventListener("click", () => {
+      if (locked) { window.SUAP_EXT.openBuyPopup?.(); return; }
       const ids = collectEntregaIdsFromView();
       if (!ids.length) { alert("Não encontrei links de entrega nesta página."); return; }
       ritSetQueue(ids);
@@ -228,11 +311,10 @@
     // stop sempre no topo-direito, quando ativo
     ritEnsureStopFloat();
   }
-
   function ritRunCadastroBatch() {
     if (!isRitCadastro()) return;
 
-    // Mantém o stop topo-direito enquanto estiver ativo
+    // MantÃ©m o stop topo-direito enquanto estiver ativo
     ritEnsureStopFloat();
 
     if (!ritIsActive()) return;
@@ -257,7 +339,7 @@
 
         const filled = fillCadastro();
         if (!filled || !requiredOk()) {
-          alert("Faltou algum campo obrigatório. Vou parar o lote para você revisar esta entrega.");
+          alert("Faltou algum campo obrigatÃ³rio. Vou parar o lote para vocÃª revisar esta entrega.");
           ritClearBatch();
           return;
         }
@@ -272,7 +354,7 @@
 
       } else if (Date.now() - start > 15000) {
         clearInterval(timer);
-        alert("Timeout: a tela de cadastro não carregou. Vou parar o lote RIT.");
+        alert("Timeout: a tela de cadastro nÃ£o carregou. Vou parar o lote RIT.");
         ritClearBatch();
       }
     }, 250);
@@ -286,3 +368,7 @@
     ritRunCadastroBatch
   });
 })();
+
+
+
+

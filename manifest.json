@@ -1,8 +1,8 @@
-{
+﻿{
   "manifest_version": 3,
-  "name": "SUAP PGD2 PIT/RIT Autofill Pro",
-  "version": "1.0.1",
-  "description": "Automatiza o preenchimento de entregas PIT/RIT no SUAP PGD2 (por entrega e em lote), com licença, trial e vinculação por usuário.",
+  "name": "PGD2 PIT/RIT Autofill Pro (SUAP)",
+  "version": "1.0.18",
+  "description": "Preenche PIT/RIT no SUAP PGD2 com automação por entrega e em lote, com modo teste (trial) e licença vinculada ao usuário.",
   "icons": {
     "16": "assets/icon16.png",
     "32": "assets/icon32.png",
@@ -16,14 +16,27 @@
   "options_page": "ui/options.html",
   "permissions": ["storage"],
   "host_permissions": [
-    "https://suap.cefet-rj.br/pgd2/*",
+    "https://*/pgd2/*",
     "https://api.proffelipewagner.com.br/api/*",
     "https://api.proffelipewagner.com.br/healthz",
-    "https://api.proffelipewagner.com.br/buy*"
+    "https://api.proffelipewagner.com.br/buy*",
+    "https://suap-pgd2-license-backend.felipewagner83.workers.dev/api/*",
+    "https://suap-pgd2-license-backend.felipewagner83.workers.dev/healthz",
+    "https://suap-pgd2-license-backend.felipewagner83.workers.dev/buy*"
+  ],
+  "background": {
+    "service_worker": "service_worker.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["ui/popup.html"],
+      "matches": ["<all_urls>"]
+    }
   ],
   "content_scripts": [
     {
-      "matches": ["https://suap.cefet-rj.br/pgd2/*"],
+      "matches": ["https://*/pgd2/*"],
       "js": [
         "content/util.js",
         "content/suap_user.js",
@@ -37,9 +50,5 @@
       ],
       "run_at": "document_idle"
     }
-  ],
-  "background": {
-    "service_worker": "service_worker.js",
-    "type": "module"
-  }
+  ]
 }
